@@ -21,7 +21,7 @@ target_include_directories(util PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/parallel_hashmap>)
 
-target_link_libraries(util PUBLIC imgui glm)
+target_link_libraries(util PUBLIC imgui glm stage)
 
 if (NOT TARGET SDL2::SDL2)
     # Assume SDL2 is in the default library path and create

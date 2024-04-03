@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <stage/stage.h>
 #include "camera.h"
 #include "lights.h"
 #include "material.h"
@@ -43,6 +44,8 @@ struct Scene {
     size_t num_geometries() const;
 
 private:
+    std::unique_ptr<stage::Scene> m_stage_scene;
+
     void load_obj(const std::string &file);
 
     void load_gltf(const std::string &file);

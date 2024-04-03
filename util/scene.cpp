@@ -49,21 +49,90 @@ bool operator==(const glm::uvec3 &a, const glm::uvec3 &b)
 Scene::Scene(const std::string &fname, MaterialMode material_mode)
     : material_mode(material_mode)
 {
-    const std::string ext = get_file_extension(fname);
-    if (ext == "obj") {
-        load_obj(fname);
-    } else if (ext == "gltf" || ext == "glb") {
-        load_gltf(fname);
-    } else if (ext == "crts") {
-        load_crts(fname);
-#ifdef PBRT_PARSER_ENABLED
-    } else if (ext == "pbrt" || ext == "pbf") {
-        load_pbrt(fname);
-#endif
-    } else {
+    m_stage_scene = std::make_unique<stage::Scene>(fname);
+    if (!m_stage_scene->isValid()) {
         std::cout << "Unsupported file '" << fname << "'\n";
         throw std::runtime_error("Unsupported file " + fname);
     }
+
+    // const std::string ext = get_file_extension(fname);
+    // if (ext == "obj") {
+    //     load_obj(fname);
+    //     return;
+    // }
+
+    for (auto& object : m_stage_scene->getObjects()) {
+        Mesh m;
+        ParameterizedMesh pm;
+        for (auto& geometry : object.geometries) {
+            Geometry g;
+            for (size_t i = 0; i < geometry.indices.size(); i += 3) {
+                glm::uvec3 idx(geometry.indices[i], 
+                               geometry.indices[i + 1], 
+                               geometry.indices[i + 2]);
+                g.indices.push_back(idx);
+            }
+            for (auto& vertex : geometry.vertices) {
+                g.vertices.push_back(glm::make_vec3(&vertex.position.x));
+                g.normals.push_back(glm::make_vec3(&vertex.normal.x));
+                g.uvs.push_back(glm::make_vec2(&vertex.uv.x));
+            }
+            if (g.vertices.size() > 0)
+                pm.material_ids.push_back(geometry.vertices[0].material_id);
+            m.geometries.push_back(g);
+        }
+        meshes.push_back(m);
+        pm.mesh_id = meshes.size() - 1;
+        parameterized_meshes.push_back(pm);
+    }
+
+    for (auto& instance : m_stage_scene->getInstances()) {
+        Instance i;
+        i.parameterized_mesh_id = instance.object_id;
+        i.transform = glm::make_mat4(instance.instance_to_world.v);
+        instances.push_back(i);
+    }
+
+    for (auto& material : m_stage_scene->getMaterials()) {
+        DisneyMaterial m;
+        m.base_color = glm::make_vec3(&material.base_color.x);
+        if (material.base_color_texid > -1) {
+            uint32_t masked_texid = TEXTURED_PARAM_MASK | material.base_color_texid;
+            m.base_color.x = *reinterpret_cast<float *>(&masked_texid);
+        }
+        m.ior = material.specular_ior;
+        m.metallic = material.base_metalness;
+        m.roughness = std::sqrt(material.specular_roughness);
+        m.specular = material.specular_weight;
+        m.specular_transmission = material.transmission_weight;
+        materials.push_back(m);
+    }
+
+    for (auto& texture : m_stage_scene->getTextures()) {
+        if (texture.getWidth() == 0 || texture.getHeight() == 0) continue;
+        Image i;
+        i.channels = texture.getChannels();
+        i.color_space = texture.isHDR() ? ColorSpace::LINEAR : ColorSpace::SRGB;
+        i.height = texture.getHeight();
+        i.width = texture.getWidth();
+        size_t isize = i.channels * i.width * i.height * (texture.isHDR() ? sizeof(float) : sizeof(uint8_t));
+        i.img.resize(isize);
+        std::memcpy(i.img.data(), texture.getData(), isize);
+        textures.push_back(i);
+    }
+    
+    validate_materials();
+
+    QuadLight light;
+    light.emission = glm::vec4(0.9f, 229.f/255.f, 207.f/255.f, 1.f) * 50.f;
+    light.normal = glm::vec4(glm::normalize(glm::vec3(0, -0.8, 0)), 0);
+    light.position = -30.f * light.normal;
+    ortho_basis(light.v_x, light.v_y, glm::vec3(light.normal));
+    light.width = 5.f;
+    light.height = 5.f;
+    lights.push_back(light);
+
+    m_stage_scene.reset(nullptr);
 }
 
 size_t Scene::unique_tris() const

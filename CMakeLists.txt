@@ -17,6 +17,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
 
 find_package(Threads REQUIRED)
 find_package(SDL2 CONFIG REQUIRED)
+find_package(stage REQUIRED)
 # Include glm as an external project
 include(cmake/glm.cmake)
 include(cmake/package.cmake)
